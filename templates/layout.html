@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <title>
+            {% if title %}
+                FastAPI Blog - {{ title }}
+            {% else %}
+                FastAPI Blog
+            {% endif %}
+        </title>
+        <meta name="description" content="A blog powered by FastAPI">
+    </head>
+    <body>
+        {# use of block -- defines a section called content that child content can override. its how tha chils will inherit. #}
+        {% block content %}
+        {% endblock content %}
+    </body>
+</html>

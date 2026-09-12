@@ -1,20 +1,8 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <title>
-      {% if title %}
-        FastAPI Blog - {{ title }}
-      {% else %}
-        FastAPI Blog
-      {% endif %}
-    </title>
-    <meta name="description" content="A blog powered by FastAPI">
-  </head>
-  <body>
-    <h1>Home page</h1>
-    {% for post in posts %}
-      <h2>{{ post.title }}</h2>
-      <p>{{ post.content }}</p>
-    {% endfor %}
-  </body>
-</html>
+{# the line below is what now helps extend fomr the parent which in this case is the layout.html #}
+{% extends "layout.html" %}
+{% block content %}
+  {% for post in posts %}
+    <h2>{{ post.title }}</h2>
+    <p>{{ post.content }}</p>
+  {% endfor %}
+{% endblock content %}
