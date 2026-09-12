@@ -1,7 +1,9 @@
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, Request
+from fastapi.templating import Jinja2Templates
 
-app = FastAPI()
+app = FastAPI() #Initializing the application.
+
+templates = Jinja2Templates(directory="templates") # Introdeuced the folder where the templates will be.
 
 posts: list[dict] = [
     {
@@ -20,10 +22,10 @@ posts: list[dict] = [
     },
 ]
 
-@app.get("/", response_class=HTMLResponse, include_in_schema=False)
-@app.get("/posts", response_class=HTMLResponse, include_in_schema=False)
-def home():
-    return f"<h1>{posts[0]['title']}<h1>"
+@app.get("/", include_in_schema=False) #this keeps out the page routes from the API documentation.
+@app.get("/posts", include_in_schema=False)
+def home(request: Request):
+    return templates.TemplateResponse(request, "home.html", {"posts":posts, "title":"Home"},) #changed from the hard coded html to using templates in jinja2 and also passing in thhse into the template.
 
 @app.get("/api/posts")
 def get_posts():
