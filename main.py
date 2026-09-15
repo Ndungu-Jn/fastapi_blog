@@ -25,8 +25,8 @@ posts: list[dict] = [
     },
 ]
 
-@app.get("/", include_in_schema=False) #this keeps out the page routes from the API documentation.
-@app.get("/posts", include_in_schema=False)
+@app.get("/", include_in_schema=False, name="home") #this keeps out the page routes from the API documentation.
+@app.get("/posts", include_in_schema=False, name="posts")
 def home(request: Request):
     return templates.TemplateResponse(request, "home_finished.html", {"posts":posts, "title":"Home"},) #changed from the hard coded html to using templates in jinja2 and also passing in thhse into the template.
 
