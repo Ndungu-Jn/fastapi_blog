@@ -12,10 +12,9 @@ posts: list[dict] = [
     {
         "id": 1,
         "user_id": 1,
-        "author": {
-            "username": "Corey Schafer",
-            "image_path": "/static/profile_pics/default.jpg",
-        },
+        "author": "Corey Schafer",
+        "image_path": "/static/profile_pics/default.jpg",
+        
         "title": "FastAPI is Awesome",
         "content": "This framework is really easy to use and super fast.",
         "date_posted": "April 20, 2025",
@@ -23,10 +22,9 @@ posts: list[dict] = [
     {
         "id": 2,
         "user_id": 2,
-        "author": {
-            "username": "Jane Doe",
-            "image_path": "/static/profile_pics/default.jpg",
-        },
+        "author": "Jane Doe",
+        "image_path": "/static/profile_pics/default.jpg",
+        
         "title": "Python is Great for Web Development",
         "content": "Python is a great language for web development, and FastAPI makes it even better.",
         "date_posted": "April 21, 2025",

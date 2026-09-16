@@ -3,14 +3,14 @@
     <article class="content-section py-3 px-4 mb-4">
         <div class="d-flex align-items-start gap-4">
             <img class="rounded-circle article-img flex-shrink-0"
-                 src="{{ post.author.image_path }}"
-                 alt="{{ post.author.username }}'s profile picture"
+                 src="{{ url_for('static', path='profile_pics/default.jpg') }}"
+                 alt="{{ post.author }}'s profile picture"
                  width="64"
                  height="64"
                  loading="lazy">
             <div class="flex-grow-1">
                 <div class="article-metadata mb-2">
-                    <a class="me-2" href="#">{{ post.author.username }}</a>
+                    <a class="me-2" href="#">{{ post.author }}</a>
                     <small class="text-body-secondary">{{ post.date_posted }}</small>
                 </div>
                 <h2 class="article-title">{{ post.title }}</h2>
@@ -29,7 +29,7 @@
         </div>
     </article>
     <!-- Edit Post Modal -->
-    <div class="modal fade"
+    {# <div class="modal fade"
          id="editModal"
          tabindex="-1"
          aria-labelledby="editModalLabel"
@@ -73,7 +73,7 @@
                 </form>
             </div>
         </div>
-    </div>
+    </div> #}
     <!-- Delete Confirmation Modal -->
     <div class="modal fade"
          id="deleteModal"
