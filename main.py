@@ -1,136 +1,346 @@
-from fastapi import FastAPI, Request, HTTPException, status
-from fastapi.exceptions import RequestValidationError #return validation error i.e when string is passed insteed of int
-from fastapi.responses import JSONResponse #to return JSON 
+
+from typing import Annotated
+
+from fastapi import Depends, FastAPI, Request, HTTPException, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from starlette.exceptions import HTTPException as StarletteHTTPException#fastapi is built on top of starlette.
-from schemas import PostCreate, PostResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+import models
+from database import Base, engine, get_db
+from schemas import PostCreate, PostResponse, UserCreate, UserResponse
 
 
-app = FastAPI()  # Initializing the application.
+# Create database tables from our models
+Base.metadata.create_all(bind=engine)
 
-app.mount("/static", StaticFiles(directory="static"), name="static")  # mounting the static files to this main file.
-
-templates = Jinja2Templates(directory="templates")  # Introduced the folder where the templates will be.
-
-posts: list[dict] = [
-    {
-        "id": 1,
-        "user_id": 1,
-        "author": "Corey Schafer",
-        "image_path": "/static/profile_pics/default.jpg",
-        
-        "title": "FastAPI is Awesome",
-        "content": "This framework is really easy to use and super fast.",
-        "date_posted": "April 20, 2025",
-    },
-    {
-        "id": 2,
-        "user_id": 2,
-        "author": "Jane Doe",
-        "image_path": "/static/profile_pics/default.jpg",
-        
-        "title": "Python is Great for Web Development",
-        "content": "Python is a great language for web development, and FastAPI makes it even better.",
-        "date_posted": "April 21, 2025",
-    },
-]
+# Create FastAPI app
+app = FastAPI()
 
 
-@app.get("/", include_in_schema=False, name="home")  # this keeps out the page routes from the API documentation.
+# Serve CSS, JS, images, etc.
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Serve uploaded/media files
+app.mount("/media", StaticFiles(directory="media"), name="media")
+
+
+# Tell FastAPI where our HTML templates are
+templates = Jinja2Templates(directory="templates")
+
+
+# ============================================================
+# HTML PAGE ROUTES
+# ============================================================
+
+# Homepage: / or /posts
+@app.get("/", include_in_schema=False, name="home")
 @app.get("/posts", include_in_schema=False, name="posts")
-def home(request: Request):
-    return templates.TemplateResponse(request, "home.html", {"posts": posts, "title": "Home"})
+def home(
+    request: Request,
+    db: Annotated[Session, Depends(get_db)]
+):
+    # Get all posts from the database
+    result = db.execute(select(models.Post))
+    posts = result.scalars().all()
 
-"""
-    Page route: renders the full HTML page for a single post (post.html),
-    including the post's title/content/author baked into the markup.
-    This is what a user's browser hits when they click a post link.
-    Hidden from the auto-generated API docs since it's a page, not an API.
-    """
-@app.get("/posts/{post_id}", include_in_schema=False, name="get_posts")
-def get_posts(request: Request, post_id: int):
-    for post in posts:
-        if post.get("id") == post_id:
-            title = post["title"][:50]
-            return templates.TemplateResponse(
-                request, "post.html", {"post": post, "title": title}
-            )
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+    # Render home.html and send posts to the template
+    return templates.TemplateResponse(
+        request,
+        "home.html",
+        {
+            "posts": posts,
+            "title": "Home"
+        }
+    )
 
-"""
-    API endpoint: returns ALL posts as raw JSON (a list of post dicts).
-    Used by frontend JS or external clients that need the full post list
-    """
-@app.get("/api/posts", response_model=list[PostResponse])
-def api_get_posts():
+
+# Display one post: /posts/1
+@app.get("/posts/{post_id}", include_in_schema=False, name="get_post")
+def get_post(
+    request: Request,
+    post_id: int,
+    db: Annotated[Session, Depends(get_db)]
+):
+    # Find the post by ID
+    result = db.execute(
+        select(models.Post).where(models.Post.id == post_id)
+    )
+    post = result.scalars().first()
+
+    if post:
+        # Use first 50 characters as page title
+        title = post.title[:50]
+
+        # Send post to post.html
+        return templates.TemplateResponse(
+            request,
+            "post.html",
+            {
+                "post": post,
+                "title": title
+            }
+        )
+
+    # Post doesn't exist
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Post not found"
+    )
+
+
+# Display all posts belonging to one user
+# Example: /users/1/posts
+@app.get("/users/{user_id}/posts", include_in_schema=False, name="user_posts")
+def user_posts(
+    request: Request,
+    user_id: int,
+    db: Annotated[Session, Depends(get_db)]
+):
+    # Find the user
+    result = db.execute(
+        select(models.User).where(models.User.id == user_id)
+    )
+    user = result.scalars().first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    # Get all posts belonging to the user
+    result = db.execute(
+        select(models.Post).where(models.Post.user_id == user_id)
+    )
+    posts = result.scalars().all()
+
+    # Render user_posts.html
+    return templates.TemplateResponse(
+        request,
+        "user_posts.html",
+        {
+            "posts": posts,
+            "user": user,
+            "title": f"{user.username}'s Posts",
+        }
+    )
+
+
+# ============================================================
+# USER API ROUTES
+# ============================================================
+
+# Create a new user
+@app.post(
+    "/api/users",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_user(
+    user: UserCreate,
+    db: Annotated[Session, Depends(get_db)]
+):
+    # Check if username already exists
+    result = db.execute(
+        select(models.User).where(
+            models.User.username == user.username
+        )
+    )
+    existing_user = result.scalars().first()
+
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already exists"
+        )
+
+    # Check if email already exists
+    result = db.execute(
+        select(models.User).where(
+            models.User.email == user.email
+        )
+    )
+    existing_email = result.scalars().first()
+
+    if existing_email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already exists"
+        )
+
+    # Create user database object
+    new_user = models.User(
+        username=user.username,
+        email=user.email,
+        password_hash="temporary-not-a-real-hash"
+    )
+
+    # Save user to database
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    return new_user
+
+
+# Get one user
+# Example: GET /api/users/1
+@app.get("/api/users/{user_id}", response_model=UserResponse)
+def api_get_user(
+    user_id: int,
+    db: Annotated[Session, Depends(get_db)]
+):
+    # Find user by ID
+    result = db.execute(
+        select(models.User).where(models.User.id == user_id)
+    )
+    user = result.scalars().first()
+
+    if user:
+        return user
+
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="User not found"
+    )
+
+
+# Get all posts belonging to a user
+# Example: GET /api/users/1/posts
+@app.get(
+    "/api/users/{user_id}/posts",
+    response_model=list[PostResponse]
+)
+def get_user_posts(
+    user_id: int,
+    db: Annotated[Session, Depends(get_db)]
+):
+    # Check that the user exists
+    result = db.execute(
+        select(models.User).where(models.User.id == user_id)
+    )
+    user = result.scalars().first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    # Get user's posts
+    result = db.execute(
+        select(models.Post).where(models.Post.user_id == user_id)
+    )
+    posts = result.scalars().all()
+
     return posts
 
+
+# ============================================================
+# POST API ROUTES
+# ============================================================
+
+# Get all posts
+@app.get("/api/posts", response_model=list[PostResponse])
+def api_get_posts(
+    db: Annotated[Session, Depends(get_db)]
+):
+    # Get all posts from database
+    result = db.execute(select(models.Post))
+    posts = result.scalars().all()
+
+    return posts
+
+
+# Create a new post
 @app.post(
     "/api/posts",
     response_model=PostResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def create_post(post: PostCreate):
-    new_id = max(p["id"] for p in posts) + 1 if posts else 1
-    new_post = {
-        "id": new_id,
-        "author": post.author,
-        "title": post.title,
-        "content": post.content,
-        "date_posted": "April 23, 2026" , 
-    }
-    posts.append(new_post)
+def create_post(
+    post: PostCreate,
+    db: Annotated[Session, Depends(get_db)]
+):
+    # Make sure the user exists
+    result = db.execute(
+        select(models.User).where(models.User.id == post.user_id)
+    )
+    user = result.scalars().first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    # Create post database object
+    new_post = models.Post(
+        title=post.title,
+        content=post.content,
+        user_id=post.user_id
+    )
+
+    # Save post to database
+    db.add(new_post)
+    db.commit()
+    db.refresh(new_post)
+
     return new_post
 
 
+# Get one post as JSON
+# Example: GET /api/posts/1
+@app.get("/api/posts/{post_id}", response_model=PostResponse)
+def api_get_post(
+    post_id: int,
+    db: Annotated[Session, Depends(get_db)]
+):
+    # Find post by ID
+    result = db.execute(
+        select(models.Post).where(models.Post.id == post_id)
+    )
+    post = result.scalars().first()
+
+    if post:
+        return post
+
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Post not found"
+    )
 
 
+# ============================================================
+# ERROR HANDLERS
+# ============================================================
 
-"""
-    API endpoint: returns a single post as raw JSON, given its ID.
-    Used by frontend JS (fetch calls) or any external client.
-    Not meant to be visited directly in a browser as a page.
-    """
-@app.get("/api/posts/{post_id}",response_model=PostResponse)
-def api_get_post(post_id: int):
-    for post in posts:
-        if post.get("id") == post_id:
-            return post
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
-
-"""
-    Global handler for any HTTPException raised anywhere in the app
-    (e.g. your 404 'Post not found' raises).
-
-    Behaves differently depending on which "half" of the app the error
-    came from:
-      - If the request was to an /api/... route: return the error as
-        JSON, since API clients (JS fetch, React, etc.) expect JSON,
-        not an HTML page.
-      - Otherwise (a normal page route): render error.html, a proper
-        styled error page for a human browsing the site.
-
-    Falls back to a generic message if exception.detail is empty.
-    """
+# Handles HTTP errors such as 404
 @app.exception_handler(StarletteHTTPException)
 def general_http_exception_handler(
     request: Request,
-    exception: StarletteHTTPException,
+    exception: StarletteHTTPException
 ):
+    # Get error message
     message = (
-            exception.detail
-            if exception.detail
-            else "An error occurred. Please check your request and try again."
-        )
-    
+        exception.detail
+        if exception.detail
+        else "An error occurred. Please check your request and try again."
+    )
+
+    # API errors return JSON
     if request.url.path.startswith("/api"):
         return JSONResponse(
             status_code=exception.status_code,
             content={"detail": message}
         )
 
-
+    # Website errors return error.html
     return templates.TemplateResponse(
         request,
         "error.html",
@@ -139,35 +349,32 @@ def general_http_exception_handler(
             "title": exception.status_code,
             "message": message,
         },
-        status_code=exception.status_code,
+        status_code=exception.status_code
     )
 
-"""
-    Global handler specifically for FastAPI's automatic input validation
-    failures — e.g. hitting /posts/John%20Doe when the route expects
-    post_id: int. FastAPI raises this BEFORE the route function runs,
-    since the data doesn't even match the expected type/shape.
 
-    Same API-vs-page branching as the general HTTP exception handler:
-      - /api/... requests get JSON back, including FastAPI's detailed
-        list of what failed validation (exception.errors()).
-      - Page requests get a rendered error.html with a simple,
-        human-readable message instead of raw validation internals.
-    """
+# Handles validation errors
+# Example: /posts/abc when post_id expects an integer
 @app.exception_handler(RequestValidationError)
-def validation_exception_handler(request:Request, exception: RequestValidationError):
+def validation_exception_handler(
+    request: Request,
+    exception: RequestValidationError
+):
+    # API validation errors return JSON
     if request.url.path.startswith("/api"):
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            content={"detail":exception.errors()},
+            content={"detail": exception.errors()}
         )
+
+    # Website validation errors return error.html
     return templates.TemplateResponse(
         request,
         "error.html",
         {
             "status_code": status.HTTP_422_UNPROCESSABLE_CONTENT,
-            "title":status.HTTP_422_UNPROCESSABLE_CONTENT,
-            "message": "Invalid request. PLease check your input and try again.",
+            "title": status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "message": "Invalid request. Please check your input and try again.",
         },
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT
     )

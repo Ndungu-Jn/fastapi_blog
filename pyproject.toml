@@ -10,6 +10,7 @@ requires-python = ">=3.12"
 dependencies = [
     "djlint>=1.46.1",
     "fastapi[standard]>=0.141.1",
+    "sqlalchemy>=2.0.54",
 ]
 
 [project.scripts]
