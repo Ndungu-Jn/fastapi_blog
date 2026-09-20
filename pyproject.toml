@@ -11,6 +11,7 @@ dependencies = [
     "aiosqlite>=0.22.1",
     "djlint>=1.46.1",
     "fastapi[standard]>=0.141.1",
+    "greenlet>=3.5.6",
     "sqlalchemy>=2.0.54",
 ]
 
