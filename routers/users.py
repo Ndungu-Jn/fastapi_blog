@@ -143,7 +143,8 @@ async def get_user_posts(
     # First check that the user exists.
     result = await db.execute(
         select(models.User)
-        .where(models.User.id == user_id)
+        .where(models.User.id == user_id).order_by(
+            models.Post.date_posted.desc()),
     )
 
     user = result.scalars().first()

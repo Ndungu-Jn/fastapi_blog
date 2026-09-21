@@ -21,6 +21,7 @@ from fastapi.exception_handlers import (
     request_validation_exception_handler
 )
 
+
 # RequestValidationError is raised when incoming request data is invalid.
 from fastapi.exceptions import RequestValidationError
 
@@ -61,6 +62,8 @@ import models
 
 from database import Base, engine, get_db
 from routers import posts, users
+
+
 # ============================================================
 # APPLICATION LIFESPAN
 # ============================================================
@@ -74,8 +77,6 @@ from routers import posts, users
 #
 # During shutdown:
 #   - Close/dispose the database engine.
-
-
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
 
@@ -130,8 +131,20 @@ app.mount(
 
 # Tell FastAPI/Jinja2 where our HTML templates are located.
 templates = Jinja2Templates(directory="templates")
-app.include_router(users.router, prefix="/api/users", tags=["users"])
-app.include_router(posts.router, prefix="/api/posts", tags=["posts"])
+
+
+# Register our API routers.
+app.include_router(
+    users.router,
+    prefix="/api/users",
+    tags=["users"]
+)
+
+app.include_router(
+    posts.router,
+    prefix="/api/posts",
+    tags=["posts"]
+)
 
 
 # ============================================================
@@ -156,10 +169,14 @@ async def home(
     #
     # selectinload(models.Post.author) tells SQLAlchemy to also
     # load the user/author associated with each post.
+    #
+    # IMPORTANT:
+    # order_by() belongs to the SELECT query itself.
+    # It does NOT belong on selectinload() in this SQLAlchemy setup.
     result = await db.execute(
-        select(models.Post).options(
-            selectinload(models.Post.author)
-        )
+        select(models.Post)
+        .options(selectinload(models.Post.author))
+        .order_by(models.Post.date_posted.desc())
     )
 
     # Convert the query result into a list of Post objects.
@@ -267,10 +284,13 @@ async def user_posts(
     #
     # Because we are selecting Post objects, it is valid to use
     # selectinload(models.Post.author) here.
+    #
+    # The order_by() is applied to the Post query itself.
     result = await db.execute(
         select(models.Post)
         .options(selectinload(models.Post.author))
         .where(models.Post.user_id == user_id)
+        .order_by(models.Post.date_posted.desc())
     )
 
     posts = result.scalars().all()
@@ -285,6 +305,7 @@ async def user_posts(
             "title": f"{user.username}'s Posts",
         }
     )
+
 
 # ============================================================
 # ERROR HANDLERS
