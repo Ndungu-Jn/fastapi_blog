@@ -42,7 +42,7 @@ class PostBase(BaseModel):
 
 
 class PostCreate(PostBase):
-    user_id: int  # thid is temporary
+    pass
 
 
 class PostUpdate(BaseModel):

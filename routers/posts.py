@@ -13,6 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 import models
 
+from auth import CurrentUser
+
 from database import get_db
 
 from schemas import (
@@ -61,38 +63,15 @@ async def api_get_posts(
 )
 async def create_post(
     post: PostCreate,
+    current_user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)]
 ):
-
-    # Make sure the user exists.
-    #
-    # IMPORTANT:
-    # We are selecting a User here.
-    #
-    # Therefore we must NOT use:
-    #
-    # selectinload(models.Post.author)
-    #
-    # because Post.author is a relationship belonging to Post,
-    # not the root User entity being selected.
-    result = await db.execute(
-        select(models.User)
-        .where(models.User.id == post.user_id)
-    )
-
-    user = result.scalars().first()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
 
     # Create the Post database object.
     new_post = models.Post(
         title=post.title,
         content=post.content,
-        user_id=post.user_id
+        user_id=current_user.id,
     )
 
     # Add the post to the database session.
@@ -172,6 +151,7 @@ async def api_get_post(
 async def api_update_post_full(
     post_id: int,
     post_data: PostCreate,
+    current_user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)]
 ):
 
@@ -190,30 +170,15 @@ async def api_update_post_full(
             detail="Post not found"
         )
 
-    # If the post is being assigned to a different user,
-    # make sure that user actually exists.
-    if post_data.user_id != post.user_id:
-
-        # We are selecting User here.
-        #
-        # Therefore we do NOT use selectinload(Post.author).
-        result = await db.execute(
-            select(models.User)
-            .where(models.User.id == post_data.user_id)
+    if post.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to update this post",
         )
-
-        user = result.scalars().first()
-
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
-            )
 
     # Update the post fields.
     post.title = post_data.title
     post.content = post_data.content
-    post.user_id = post_data.user_id
 
     # Save changes.
     await db.commit()
@@ -249,6 +214,7 @@ async def api_update_post_full(
 async def api_update_post_partial(
     post_id: int,
     post_data: PostUpdate,
+    current_user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)]
 ):
 
@@ -267,40 +233,15 @@ async def api_update_post_partial(
             detail="Post not found"
         )
 
-    # model_dump(exclude_unset=True) returns only the fields
-    # that were actually included in the PATCH request.
-    #
-    # Example:
-    #
-    # {
-    #     "title": "New title"
-    # }
-    #
-    # becomes:
-    #
-    # {"title": "New title"}
+    if post.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to update this post",
+        )
+
     update_data = post_data.model_dump(
         exclude_unset=True
     )
-
-    # If user_id is being changed, verify that the new user exists.
-    if "user_id" in update_data:
-
-        result = await db.execute(
-            select(models.User)
-            .where(
-                models.User.id == update_data["user_id"]
-            )
-        )
-
-        user = result.scalars().first()
-
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
-            )
-
     # Apply each supplied field to the existing post.
     for field, value in update_data.items():
         setattr(post, field, value)
@@ -328,13 +269,10 @@ async def api_update_post_partial(
 )
 async def api_delete_post(
     post_id: int,
+    current_user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)]
 ):
 
-    # Find the post by ID.
-    #
-    # We don't need to load the author because we are only
-    # deleting the post.
     result = await db.execute(
         select(models.Post)
         .where(models.Post.id == post_id)
@@ -346,6 +284,12 @@ async def api_delete_post(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Post not found"
+        )
+
+    if post.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to delete this post",
         )
 
     # Delete the post.
