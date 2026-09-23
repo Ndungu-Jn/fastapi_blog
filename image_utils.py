@@ -19,10 +19,19 @@ def process_profile_image(content: bytes) -> str:
         filename = f"{uuid.uuid4().hex}.jpg"
         filepath = PROFILE_PICS_DIR / filename
 
-        PROFILE_PICS_DIR.mkdir(parent=True, exist_ok=True)
+        PROFILE_PICS_DIR.mkdir(parents=True, exist_ok=True)
 
         # output = BytesIO()
         img.save(filepath, "JPEG", quality=85, optimize=True)
         # output.seek(0)
 
     return filename
+
+
+async def delete_profile_image(filename: str | None) -> None:
+    if filename is None:
+        return
+
+    filepath = PROFILE_PICS_DIR / filename
+    if filepath.exists():
+        filepath.unlink()
