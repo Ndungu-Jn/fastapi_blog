@@ -1,0 +1,28 @@
+import uuid  # unique file names
+from io import BytesIO  # image bytes
+from pathlib import Path  # for file
+
+from PIL import Image, ImageOps
+
+PROFILE_PICS_DIR = Path("media/profile_pics")
+
+
+def process_profile_image(content: bytes) -> str:
+    with Image.open(BytesIO(content)) as original:
+        img = ImageOps.exif_transpose(original)
+
+        img = ImageOps.fit(img, (300, 300), method=Image.Resampling.LANCZOS)
+
+        if img.mode in ("RGBA", "LA", "P"):
+            img = img.convert("RGB")
+
+        filename = f"{uuid.uuid4().hex}.jpg"
+        filepath = PROFILE_PICS_DIR / filename
+
+        PROFILE_PICS_DIR.mkdir(parent=True, exist_ok=True)
+
+        # output = BytesIO()
+        img.save(filepath, "JPEG", quality=85, optimize=True)
+        # output.seek(0)
+
+    return filename
