@@ -9,7 +9,7 @@ class UserBase(BaseModel):
 
 
 class UserCreate(UserBase):
-    password: str = Field(max_length=8)
+    password: str = Field(max_length=14)
 
 
 class UserPublic(BaseModel):
