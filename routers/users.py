@@ -7,7 +7,7 @@ from fastapi import (
     # BackgroundTasks,
     Depends,
     HTTPException,
-    # Query,
+    Query,
     # UploadFile,
     status,
     UploadFile,
@@ -271,7 +271,7 @@ async def get_user(user_id: int, db: Annotated[AsyncSession, Depends(get_db)]):
                         detail="User not found")
 
 
-@router.get("/{user_id}/posts", response_model=list[PostResponse])
+@router.get("/{user_id}/posts", response_model=PaginatedPostsResponse)
 async def get_user_posts(
     user_id: int,
     db: Annotated[AsyncSession, Depends(get_db)],
