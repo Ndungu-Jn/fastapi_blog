@@ -16,6 +16,8 @@ import models
 from config import settings
 from database import get_db
 
+import hashlib
+import secrets
 
 # Create a password hasher using Argon2.
 #
@@ -47,7 +49,15 @@ def verify_password(
     )
 
 
+def generate_reset_token() -> str:
+    return secrets.token_urlsafe(32)
+
+
+def hash_reset_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
 # Create a JWT access token.
+
+
 def create_access_token(
     data: dict,
     expires_delta: timedelta | None = None

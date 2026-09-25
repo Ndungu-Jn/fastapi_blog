@@ -16,5 +16,18 @@ class Settings(BaseSettings):
 
     posts_per_page: int = 5
 
+# emaill config settings
+    reset_token_expire_minutes: int = 60
+
+    mail_server: str = "localhost"
+    mail_port: int = 587
+    mail_username: str = ""
+    mail_password: SecretStr = SecretStr("")
+    mail_from: str = "noreply@example.com"
+    mail_use_tls: bool = True
+
+    # we will use mailtrap as a sandbox service for test emails.
+    frontend_url: str = "http://localhost:8000"
+
 
 settings = Settings()  # LOaded from .env file
