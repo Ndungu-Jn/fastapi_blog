@@ -12,8 +12,8 @@ from main import app
 
 USERS = [
     {
-        "username": "CoreyMSchafer",
-        "email": "CoreyMSchafer@gmail.com",
+        "username": "Ndungu",
+        "email": "Ndungu@gmail.com",
         "password": "TestPassword1!",
     },
     {
