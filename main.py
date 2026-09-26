@@ -321,6 +321,17 @@ async def forgot_password_page(request: Request):
         {"title": "Forgot Password"},
     )
 
+
+@app.get("/reset-password", include_in_schema=False)
+async def reset_password_page(request: Request):
+    response = templates.TemplateResponse(
+        request,
+        "reset_password.html",
+        {"title": "Reset Password"},
+    )
+    response.headers["Referrer-Policy"] = "no-referrer"
+    return response
+
 # ============================================================
 # ERROR HANDLERS
 # ============================================================
