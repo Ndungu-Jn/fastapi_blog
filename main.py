@@ -1,121 +1,66 @@
-# asynccontextmanager lets us run code when the FastAPI application
-# starts and when it shuts down.
+# Runs code when FastAPI starts and shuts down.
 from contextlib import asynccontextmanager
 
-# Annotated allows us to combine a Python type with FastAPI dependencies.
+# Combines a type with a FastAPI dependency.
 from typing import Annotated
 
-
-# FastAPI is the main framework.
-# Depends is used for dependency injection, such as getting a database session.
-# Request gives us access to the incoming HTTP request.
-# HTTPException is used when we need to return an HTTP error.
-# status provides readable HTTP status codes.
+# FastAPI tools used for routes, dependencies, requests, and HTTP errors.
 from fastapi import Depends, FastAPI, Request, HTTPException, status
 
-
-# These are FastAPI's built-in exception handlers.
-# We use them for API errors so that API clients receive JSON responses.
+# Built-in handlers used to return appropriate API error responses.
 from fastapi.exception_handlers import (
     http_exception_handler,
     request_validation_exception_handler
 )
 
-
-# RequestValidationError is raised when incoming request data is invalid.
+# Raised when incoming request data fails validation.
 from fastapi.exceptions import RequestValidationError
 
-
-# StaticFiles allows FastAPI to serve CSS, JavaScript, images, etc.
+# Serves static files such as CSS, JavaScript, and images.
 from fastapi.staticfiles import StaticFiles
 
-# Jinja2Templates allows us to render our HTML templates.
+# Renders Jinja2 HTML templates.
 from fastapi.templating import Jinja2Templates
 
-
-# select is SQLAlchemy's modern way of building SELECT queries.
+# Builds SQL queries using SQLAlchemy.
 from sqlalchemy import select, func
 
-# AsyncSession is the asynchronous SQLAlchemy database session.
+# Asynchronous database session.
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# selectinload loads related data efficiently.
-# For example, when getting Posts, we can load the Post's author.
+# Loads related records efficiently.
 from sqlalchemy.orm import selectinload
 
-
-# Starlette's HTTPException is the base exception used by FastAPI.
-# We use it in our general error handler.
+# Starlette HTTPException is used by our general error handler.
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-
-# These are our own project files.
-#
-# IMPORTANT:
-# The project currently has main.py, models.py, database.py and schemas.py
-# directly in the same project directory.
-#
-# Therefore we use normal/absolute imports here.
-# DO NOT change these to "from . import ..." unless the project is converted
-# into a Python package and started differently.
+# Project files.
 import models
-
 from database import Base, engine, get_db
 from routers import posts, users
-
 from config import settings
 
 
-# ============================================================
-# APPLICATION LIFESPAN
-# ============================================================
-
-# The lifespan function controls what happens when FastAPI starts
-# and when FastAPI shuts down.
-#
-# During startup:
-#   - Connect to the database.
-#   - Create database tables if they do not already exist.
-#
-# During shutdown:
-#   - Close/dispose the database engine.
+# Create tables at startup and close the database engine at shutdown.
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
 
-    # Startup
     async with engine.begin() as conn:
 
-        # Base.metadata.create_all creates the tables defined
-        # by our SQLAlchemy models.
-        #
-        # run_sync is needed because create_all itself is synchronous,
-        # while our database connection is asynchronous.
+        # create_all is synchronous, so run it through the async connection.
         await conn.run_sync(Base.metadata.create_all)
 
-    # FastAPI now continues running the application.
+    # FastAPI runs the application between startup and shutdown.
     yield
 
-    # Shutdown
-    # Dispose/close the SQLAlchemy engine when FastAPI stops.
     await engine.dispose()
 
 
-# ============================================================
-# CREATE FASTAPI APPLICATION
-# ============================================================
-
-# Connect our lifespan function to FastAPI.
-#
-# This is important because otherwise the lifespan function above
-# would be defined but never actually used.
+# Attach the startup/shutdown lifecycle to the FastAPI app.
 app = FastAPI(lifespan=lifespan)
 
 
-# ============================================================
-# STATIC AND MEDIA FILES
-# ============================================================
-
-# Serve CSS, JavaScript, images, etc. from the static directory.
+# Serve files from the static directory.
 app.mount(
     "/static",
     StaticFiles(directory="static"),
@@ -123,7 +68,7 @@ app.mount(
 )
 
 
-# Serve uploaded/media files from the media directory.
+# Serve uploaded files from the media directory.
 app.mount(
     "/media",
     StaticFiles(directory="media"),
@@ -131,17 +76,19 @@ app.mount(
 )
 
 
-# Tell FastAPI/Jinja2 where our HTML templates are located.
+# Tell Jinja2 where the HTML templates are located.
 templates = Jinja2Templates(directory="templates")
 
 
-# Register our API routers.
+# Register the users API routes.
 app.include_router(
     users.router,
     prefix="/api/users",
     tags=["users"]
 )
 
+
+# Register the posts API routes.
 app.include_router(
     posts.router,
     prefix="/api/posts",
@@ -149,13 +96,9 @@ app.include_router(
 )
 
 
-# ============================================================
-# HTML PAGE ROUTES
-# ============================================================
-
-
 @app.get("/", include_in_schema=False, name="home")
 @app.get("/posts", include_in_schema=False, name="posts")
+# Display the latest posts on the home page.
 async def home(request: Request, db: Annotated[AsyncSession, Depends(get_db)]):
     count_result = await db.execute(select(func.count()).select_from(models.Post))
     total = count_result.scalar() or 0
@@ -166,6 +109,7 @@ async def home(request: Request, db: Annotated[AsyncSession, Depends(get_db)]):
         .order_by(models.Post.date_posted.desc())
         .limit(settings.posts_per_page),
     )
+
     posts = result.scalars().all()
 
     has_more = len(posts) < total
@@ -182,31 +126,20 @@ async def home(request: Request, db: Annotated[AsyncSession, Depends(get_db)]):
     )
 
 
-# ============================================================
-# DISPLAY ONE POST
-# ============================================================
-
-# Example:
-#
-# /posts/1
-#
-# The number 1 is the post_id.
 @app.get(
     "/posts/{post_id}",
     include_in_schema=False,
     name="get_post"
 )
+# Display one post by its ID.
 async def get_post(
     request: Request,
     post_id: int,
     db: Annotated[AsyncSession, Depends(get_db)]
 ):
 
-    # Find the post by ID.
-    #
-    # We also load the author because post.html may need
-    # information about the user who created the post.
     result = await db.execute(
+        # Load the author together with the post to avoid an extra query later.
         select(models.Post)
         .options(selectinload(models.Post.author))
         .where(models.Post.id == post_id)
@@ -216,11 +149,9 @@ async def get_post(
 
     if post:
 
-        # Use the first 50 characters of the post title
-        # as the page title.
+        # Use part of the title as the page title.
         title = post.title[:50]
 
-        # Send the post to post.html.
         return templates.TemplateResponse(
             request,
             "post.html",
@@ -230,25 +161,25 @@ async def get_post(
             }
         )
 
-    # The post does not exist.
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
         detail="Post not found"
     )
 
 
-# ============================================================
-# DISPLAY ALL POSTS BELONGING TO ONE USER
-# ============================================================
-
 @app.get("/users/{user_id}/posts", include_in_schema=False, name="user_posts")
+# Display all posts belonging to a specific user.
 async def user_posts_page(
     request: Request,
     user_id: int,
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    result = await db.execute(select(models.User).where(models.User.id == user_id))
+    result = await db.execute(
+        select(models.User).where(models.User.id == user_id)
+    )
+
     user = result.scalars().first()
+
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -260,6 +191,7 @@ async def user_posts_page(
         .select_from(models.Post)
         .where(models.Post.user_id == user_id),
     )
+
     total = count_result.scalar() or 0
 
     result = await db.execute(
@@ -269,6 +201,7 @@ async def user_posts_page(
         .order_by(models.Post.date_posted.desc())
         .limit(settings.posts_per_page),
     )
+
     posts = result.scalars().all()
 
     has_more = len(posts) < total
@@ -287,6 +220,7 @@ async def user_posts_page(
 
 
 @app.get("/login", include_in_schema=False)
+# Render the login page.
 async def login_page(request: Request):
     return templates.TemplateResponse(
         request,
@@ -296,6 +230,7 @@ async def login_page(request: Request):
 
 
 @app.get("/register", include_in_schema=False)
+# Render the registration page.
 async def register_page(request: Request):
     return templates.TemplateResponse(
         request,
@@ -305,6 +240,7 @@ async def register_page(request: Request):
 
 
 @app.get("/account", include_in_schema=False)
+# Render the account page.
 async def account_page(request: Request):
     return templates.TemplateResponse(
         request,
@@ -314,6 +250,7 @@ async def account_page(request: Request):
 
 
 @app.get("/forgot-password", include_in_schema=False)
+# Render the forgot-password page.
 async def forgot_password_page(request: Request):
     return templates.TemplateResponse(
         request,
@@ -323,42 +260,38 @@ async def forgot_password_page(request: Request):
 
 
 @app.get("/reset-password", include_in_schema=False)
+# Render the reset-password page.
 async def reset_password_page(request: Request):
     response = templates.TemplateResponse(
         request,
         "reset_password.html",
         {"title": "Reset Password"},
     )
+
     response.headers["Referrer-Policy"] = "no-referrer"
+
     return response
 
-# ============================================================
-# ERROR HANDLERS
-# ============================================================
 
-
-# Handles HTTP errors such as 404.
+# Return JSON for API errors and an HTML page for website errors.
 @app.exception_handler(StarletteHTTPException)
 async def general_http_exception_handler(
     request: Request,
     exception: StarletteHTTPException
 ):
 
-    # API errors should return JSON.
     if request.url.path.startswith("/api"):
         return await http_exception_handler(
             request,
             exception
         )
 
-    # Get the error message.
     message = (
         exception.detail
         if exception.detail
         else "An error occurred. Please check your request and try again."
     )
 
-    # Website errors should render error.html.
     return templates.TemplateResponse(
         request,
         "error.html",
@@ -371,31 +304,19 @@ async def general_http_exception_handler(
     )
 
 
-# ============================================================
-# VALIDATION ERROR HANDLER
-# ============================================================
-
-# Handles validation errors.
-#
-# Example:
-#
-# /posts/abc
-#
-# when post_id expects an integer.
+# Handle invalid request data differently for APIs and HTML pages.
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(
     request: Request,
     exception: RequestValidationError
 ):
 
-    # API validation errors return JSON.
     if request.url.path.startswith("/api"):
         return await request_validation_exception_handler(
             request,
             exception
         )
 
-    # Website validation errors render error.html.
     return templates.TemplateResponse(
         request,
         "error.html",
