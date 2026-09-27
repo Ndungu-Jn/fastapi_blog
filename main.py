@@ -36,7 +36,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 # Project files.
 import models
-from database import Base, engine, get_db
+from database import engine, get_db
 from routers import posts, users
 from config import settings
 
@@ -44,11 +44,6 @@ from config import settings
 # Create tables at startup and close the database engine at shutdown.
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-
-    async with engine.begin() as conn:
-
-        # create_all is synchronous, so run it through the async connection.
-        await conn.run_sync(Base.metadata.create_all)
 
     # FastAPI runs the application between startup and shutdown.
     yield
