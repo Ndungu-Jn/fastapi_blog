@@ -62,15 +62,6 @@ app.mount(
     name="static"
 )
 
-
-# Serve uploaded files from the media directory.
-app.mount(
-    "/media",
-    StaticFiles(directory="media"),
-    name="media"
-)
-
-
 # Tell Jinja2 where the HTML templates are located.
 templates = Jinja2Templates(directory="templates")
 
