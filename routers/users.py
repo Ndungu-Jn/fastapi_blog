@@ -2,6 +2,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 # # from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -23,7 +24,7 @@ from starlette.concurrency import run_in_threadpool
 from PIL import UnidentifiedImageError
 
 from starlette.concurrency import run_in_threadpool
-from image_utils import delete_profile_image, process_profile_image
+from image_utils import delete_profile_image, process_profile_image, upload_profile_image
 
 import models
 from auth import (
