@@ -1,17 +1,14 @@
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
-# # from botocore.exceptions import ClientError
-from botocore.exceptions import ClientError
 from fastapi import (
     APIRouter,
     BackgroundTasks,
     Depends,
     HTTPException,
     Query,
-    status,
     UploadFile,
-    Query
+    status,
 )
 from fastapi.security import OAuth2PasswordRequestForm
 from PIL import UnidentifiedImageError
@@ -21,10 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from starlette.concurrency import run_in_threadpool
 
-from PIL import UnidentifiedImageError
-
-from starlette.concurrency import run_in_threadpool
-from image_utils import delete_profile_image, process_profile_image, upload_profile_image
+from image_utils import delete_profile_image, process_profile_image
 
 import models
 from auth import (
@@ -38,10 +32,10 @@ from auth import (
 from config import settings
 from database import get_db
 from email_utils import send_password_reset_email
-
 from schemas import (
     ChangePasswordRequest,
     ForgotPasswordRequest,
+    PaginatedPostsResponse,
     PostResponse,
     ResetPasswordRequest,
     Token,
@@ -49,7 +43,6 @@ from schemas import (
     UserPrivate,
     UserPublic,
     UserUpdate,
-    PaginatedPostsResponse
 )
 
 router = APIRouter()
@@ -418,32 +411,30 @@ async def upload_profile_picture(
     if len(content) > settings.max_upload_size_bytes:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File too large. Maximum size is {settings.max_upload_size_bytes // (1024 * 1024)}MB",
+            detail=(
+                f"File too large. Maximum size is "
+                f"{settings.max_upload_size_bytes // (1024 * 1024)}MB"
+            ),
         )
 
     try:
-        processed_bytes, new_filename = await run_in_threadpool(
+        new_filename = await run_in_threadpool(
             process_profile_image,
-            content
+            content,
         )
     except UnidentifiedImageError as err:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid image file. Please upload a valid image (JPEG, PNG, GIF, WebP).",
-        ) from err
-
-    # Upload to S3 (also runs in threadpool via async wrapper)
-    try:
-        await upload_profile_image(processed_bytes, new_filename)
-    except ClientError as err:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to upload image. Please try again.",
+            detail=(
+                "Invalid image file. Please upload a valid image "
+                "(JPEG, PNG, GIF, WebP)."
+            ),
         ) from err
 
     old_filename = current_user.image_file
 
     current_user.image_file = new_filename
+
     await db.commit()
     await db.refresh(current_user)
 

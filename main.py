@@ -61,6 +61,12 @@ app.mount(
     StaticFiles(directory="static"),
     name="static"
 )
+# Serve uploaded profile pictures.
+app.mount(
+    "/media",
+    StaticFiles(directory="media"),
+    name="media"
+)
 
 # Tell Jinja2 where the HTML templates are located.
 templates = Jinja2Templates(directory="templates")
